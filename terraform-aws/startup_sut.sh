@@ -1,30 +1,28 @@
 #!/bin/bash
 
-export DEBIAN_FRONTEND=noninteractive
-
-# Update and Upgrade the System
+# Install Docker
 sudo apt update
-sudo apt upgrade -y
-
-# Install Dependencies for Docker
-sudo apt install -y -q apt-transport-https ca-certificates curl software-properties-common
-
-# Add Docker’s official GPG key
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-
-# Set up the Docker repository
-sudo add-apt-repository --yes "deb [arch=amd64] https://download.docker.com/linux/ubuntu focal stable"
-
-# Update apt package index and install Docker CE
-sudo apt update
-sudo apt install -y -q docker-ce
-
-# Start Docker service
+sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+curl -fsSL https://get.docker.com -o get-docker.sh
+sudo sh get-docker.sh
+sudo usermod -aG docker $USER
 sudo systemctl start docker
 sudo systemctl enable docker
 
-# Run Prometheus Docker container
-echo "Starting Prometheus ..."
+# Create Prometheus configuration file
+sudo mkdir -p /etc/prometheus
+sudo touch /etc/prometheus/prometheus.yml
+
+# Add minimal configuration to the Prometheus configuration file
+echo "global:" | sudo tee -a /etc/prometheus/prometheus.yml
+echo "  scrape_interval: 15s" | sudo tee -a /etc/prometheus/prometheus.yml
+echo "" | sudo tee -a /etc/prometheus/prometheus.yml
+echo "scrape_configs:" | sudo tee -a /etc/prometheus/prometheus.yml
+echo "  - job_name: 'prometheus'" | sudo tee -a /etc/prometheus/prometheus.yml
+echo "    static_configs:" | sudo tee -a /etc/prometheus/prometheus.yml
+echo "      - targets: ['localhost:9090']" | sudo tee -a /etc/prometheus/prometheus.yml
+
+# Run Prometheus container
 sudo docker run -d \
      --name prometheus \
      -p 9090:9090 \
@@ -32,7 +30,10 @@ sudo docker run -d \
      -v /prometheus:/prometheus \
      prom/prometheus
 
-echo "Prometheus container started on port 9090"
+# Adjust permissions
+sudo chmod -R 777 /prometheus
 
-# Create a file to indicate that the script has finished running
-touch /done
+# Restart Prometheus container
+sudo docker restart prometheus
+
+echo "Prometheus setup completed successfully!"
