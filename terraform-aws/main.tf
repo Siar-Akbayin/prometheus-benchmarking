@@ -99,21 +99,6 @@ resource "aws_security_group" "my-security-group-csb" {
   }
 }
 
-# Create EC2 instances
-resource "aws_instance" "prometheus_server" {
-  ami           = "ami-0ec3d9efceafb89e0" # Debian 12 x86, username: admin
-  instance_type = "t3.medium"
-  subnet_id     = "subnet-034cd218e2b28c58a"
-  vpc_security_group_ids = [aws_security_group.my-security-group-csb.id]
-  key_name = aws_key_pair.deployer.key_name
-
-  user_data = file("${path.module}/startup_sut.sh")
-
-  tags = {
-    Name = "Prometheus Server"
-  }
-}
-
 resource "aws_instance" "benchmark_client" {
   ami           = "ami-0ec3d9efceafb89e0" # Debian 12 x86, username: admin
   instance_type = "t3.large"
@@ -126,14 +111,97 @@ resource "aws_instance" "benchmark_client" {
   }
 }
 
-resource "aws_instance" "metrics_exposer" {
+#resource "terraform_data" "add_ip_to_script" {
+#  provisioner "local-exec" {
+#    interpreter = ["bash", "-exc"]
+#    command = <<-EOT
+#      awk 'NR==2 {sub(/localhost/, ${aws_instance.benchmark_client.public_ip})}1' startup_sut.sh > temp_file && mv temp_file startup_sut.sh
+#    EOT
+#  }
+#  depends_on = [aws_instance.benchmark_client]
+#}
+
+resource "local_file" "startup_sut" {
+  file_permission = "0666"
+  content = <<-EOT
+  #!/bin/bash
+
+  # Install Docker
+  sudo apt update
+  sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+  curl -fsSL https://get.docker.com -o get-docker.sh
+  sudo sh get-docker.sh
+  sudo usermod -aG docker $USER
+  sudo systemctl start docker
+  sudo systemctl enable docker
+
+  # Create Prometheus configuration file
+  sudo mkdir -p /etc/prometheus
+  sudo touch /etc/prometheus/prometheus.yml
+
+  # Append Prometheus configuration to the file
+  echo "global:" | sudo tee -a /etc/prometheus/prometheus.yml
+  echo "  scrape_interval: 15s" | sudo tee -a /etc/prometheus/prometheus.yml
+  echo "" | sudo tee -a /etc/prometheus/prometheus.yml
+  echo "scrape_configs:" | sudo tee -a /etc/prometheus/prometheus.yml
+  echo "  - job_name: 'prometheus'" | sudo tee -a /etc/prometheus/prometheus.yml
+  echo "    static_configs:" | sudo tee -a /etc/prometheus/prometheus.yml
+  echo "      - targets: ['localhost:9090']" | sudo tee -a /etc/prometheus/prometheus.yml
+  echo "" | sudo tee -a /etc/prometheus/prometheus.yml
+  echo "  - job_name: 'benchmarking_client'" | sudo tee -a /etc/prometheus/prometheus.yml
+  echo "    static_configs:" | sudo tee -a /etc/prometheus/prometheus.yml
+  echo "      - targets: ['${aws_instance.benchmark_client.public_ip}:8081']" | sudo tee -a /etc/prometheus/prometheus.yml
+
+  # Run Prometheus container
+  sudo docker run -d \
+       --name prometheus \
+       -p 9090:9090 \
+       -v /etc/prometheus:/etc/prometheus \
+       -v /prometheus:/prometheus \
+       prom/prometheus
+
+  # Adjust permissions
+  sudo chmod -R 777 /prometheus
+
+  # Restart Prometheus container
+  sudo docker restart prometheus
+
+  echo "Prometheus setup completed successfully!"
+
+    EOT
+  filename = "${path.module}/startup_sut.sh"
+
+  depends_on = [aws_instance.benchmark_client]
+
+}
+
+
+# Create EC2 instance and deploy Prometheus on it
+resource "aws_instance" "prometheus_server" {
   ami           = "ami-0ec3d9efceafb89e0" # Debian 12 x86, username: admin
   instance_type = "t3.medium"
   subnet_id     = "subnet-034cd218e2b28c58a"
   vpc_security_group_ids = [aws_security_group.my-security-group-csb.id]
   key_name = aws_key_pair.deployer.key_name
 
+  user_data = local_file.startup_sut.content
+
   tags = {
-    Name = "Metrics Exposer"
+    Name = "Prometheus Server"
   }
+  depends_on = [aws_instance.benchmark_client]
 }
+
+#resource "aws_instance" "metrics_exposer" {
+#  ami           = "ami-0ec3d9efceafb89e0" # Debian 12 x86, username: admin
+#  instance_type = "t3.medium"
+#  subnet_id     = "subnet-034cd218e2b28c58a"
+#  vpc_security_group_ids = [aws_security_group.my-security-group-csb.id]
+#  key_name = aws_key_pair.deployer.key_name
+#
+#  tags = {
+#    Name = "Metrics Exposer"
+#  }
+#}
+
+
