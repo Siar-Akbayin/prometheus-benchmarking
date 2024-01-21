@@ -42,27 +42,6 @@ resource "aws_key_pair" "deployer" {
 #  enable_dns_hostnames = true
 #}
 
-# Create an internet gateway
-#resource "aws_internet_gateway" "example_igw" {
-#  vpc_id = "vpc-0ecaaa86c9a76e267"
-#}
-
-# Fetch the latest Amazon Linux AMI for x86_64 architecture
-#data "aws_ami" "this" {
-#  most_recent = true
-#  owners      = ["amazon"]
-#
-#  filter {
-#    name   = "architecture"
-#    values = ["x86_64"]
-#  }
-#
-#  filter {
-#    name   = "name"
-#    values = ["al2023-ami-2023*"]
-#  }
-#}
-
 # Create a subnet
 #resource "aws_subnet" "example_subnet" {
 #  vpc_id     = "vpc-0ecaaa86c9a76e267"
@@ -144,10 +123,6 @@ resource "local_file" "startup_sut" {
   echo "  scrape_interval: 15s" | sudo tee -a /etc/prometheus/prometheus.yml
   echo "" | sudo tee -a /etc/prometheus/prometheus.yml
   echo "scrape_configs:" | sudo tee -a /etc/prometheus/prometheus.yml
-  echo "  - job_name: 'prometheus'" | sudo tee -a /etc/prometheus/prometheus.yml
-  echo "    static_configs:" | sudo tee -a /etc/prometheus/prometheus.yml
-  echo "      - targets: ['localhost:9090']" | sudo tee -a /etc/prometheus/prometheus.yml
-  echo "" | sudo tee -a /etc/prometheus/prometheus.yml
   echo "  - job_name: 'benchmarking_client'" | sudo tee -a /etc/prometheus/prometheus.yml
   echo "    static_configs:" | sudo tee -a /etc/prometheus/prometheus.yml
   echo "      - targets: ['${aws_instance.benchmark_client.public_ip}:8081']" | sudo tee -a /etc/prometheus/prometheus.yml
@@ -192,16 +167,41 @@ resource "aws_instance" "prometheus_server" {
   depends_on = [aws_instance.benchmark_client]
 }
 
-#resource "aws_instance" "metrics_exposer" {
-#  ami           = "ami-0ec3d9efceafb89e0" # Debian 12 x86, username: admin
-#  instance_type = "t3.medium"
-#  subnet_id     = "subnet-034cd218e2b28c58a"
-#  vpc_security_group_ids = [aws_security_group.my-security-group-csb.id]
-#  key_name = aws_key_pair.deployer.key_name
-#
-#  tags = {
-#    Name = "Metrics Exposer"
-#  }
-#}
+# Write script to a temporary file
+resource "local_file" "prometheus_target_update" {
+  content  = <<-EOT
+    #!/bin/bash
+    PROMETHEUS_CONFIG="/etc/prometheus/prometheus.yml"
+    PROMETHEUS_SERVER_IP="$1"
+
+    # Generate Prometheus configuration
+    echo "  - job_name: 'prometheus'" | sudo tee -a "$PROMETHEUS_CONFIG"
+    echo "    static_configs:" | sudo tee -a "$PROMETHEUS_CONFIG"
+    echo "      - targets: ['$PROMETHEUS_SERVER_IP:9090']" | sudo tee -a "$PROMETHEUS_CONFIG"
+    echo "" | sudo tee -a "$PROMETHEUS_CONFIG"
+
+    # Restart Prometheus
+    sudo docker restart prometheus
+
+    echo "Prometheus setup completed successfully!"
+  EOT
+  filename = "${path.module}/prometheus_setup.sh"
+}
+
+# ssh into Prometheus instance and set target to itself to scape own performance
+resource "terraform_data" "prometheus_setup" {
+  provisioner "local-exec" {
+    command = <<-EOT
+      ssh -i "${aws_key_pair.deployer.key_name}.pem" admin@${aws_instance.prometheus_server.public_ip} 'bash -s' <<EOF
+        # Your script content here
+        echo "  - job_name: 'prometheus'" | sudo tee -a /etc/prometheus/prometheus.yml
+        echo "    static_configs:" | sudo tee -a /etc/prometheus/prometheus.yml
+        echo "      - targets: ['${aws_instance.prometheus_server.public_ip}:9090']" | sudo tee -a /etc/prometheus/prometheus.yml
+        echo "" | sudo tee -a /etc/prometheus/prometheus.yml
+        sudo docker restart prometheus
+    EOT
+  }
+  depends_on = [local_file.prometheus_target_update, aws_instance.prometheus_server]
+}
 
 
