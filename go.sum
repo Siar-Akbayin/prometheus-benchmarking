@@ -1,5 +1,5 @@
-github.com/Siar-Akbayin/prometheus-metrics-generator v0.1.0 h1:cbhH6PE8iUOdseYzdoykcrm9x4I80jXNtQd6E+DTvRk=
-github.com/Siar-Akbayin/prometheus-metrics-generator v0.1.0/go.mod h1:FNfHiekAjiflNDZXklhwpsgAcMn4RDyaAzIvz2SkYzE=
+github.com/Siar-Akbayin/prometheus-metrics-generator v0.1.1 h1:wGrKoOn+IHvEraDZmvP8dy/reuZM0nCIP30RqHwq9GE=
+github.com/Siar-Akbayin/prometheus-metrics-generator v0.1.1/go.mod h1:Ip6LFp242SCe/lL6TJN3UEJ6VfINGEib2sNfhvS2D/s=
 github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
 github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
 github.com/cespare/xxhash/v2 v2.2.0 h1:DC2CZ1Ep5Y4k3ZQ899DldepgrayRUGE6BBZ/cd9Cj44=

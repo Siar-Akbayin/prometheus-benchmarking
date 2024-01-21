@@ -3,7 +3,7 @@ module github.com/Siar-Akbayin/prometheus-benchmarking
 go 1.21.5
 
 require (
-	github.com/Siar-Akbayin/prometheus-metrics-generator v0.1.0
+	github.com/Siar-Akbayin/prometheus-metrics-generator v0.1.1
 	github.com/prometheus/client_golang v1.18.0
 )
 

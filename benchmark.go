@@ -28,12 +28,12 @@ type Config struct {
 }
 
 var (
-	gaugeVec       *prometheus.GaugeVec
-	cardinalityVec *prometheus.GaugeVec
+	gaugeVec       prometheus.GaugeVec
+	cardinalityVec prometheus.GaugeVec
 )
 
 // initializeMetrics function
-func initializeMetrics(maxCardinality int) (*prometheus.GaugeVec, *prometheus.GaugeVec) {
+func initializeMetrics(maxCardinality int) (prometheus.GaugeVec, prometheus.GaugeVec) {
 	gaugeVec := metrics.CreateGaugeWithCardinality("sample_gauge", maxCardinality)
 	cardinalityVec := metrics.CreateGaugeWithCardinality("cardinality_gauge", maxCardinality)
 	return gaugeVec, cardinalityVec
@@ -85,8 +85,8 @@ func main() {
 
 	// Initialize and register Prometheus gauge metrics
 	gaugeVec, cardinalityVec = initializeMetrics(config.MaxCardinality)
-	prometheus.MustRegister(*gaugeVec)
-	prometheus.MustRegister(*cardinalityVec)
+	prometheus.MustRegister(gaugeVec)
+	prometheus.MustRegister(cardinalityVec)
 
 	// Start Prometheus HTTP server for metric scraping
 	go func() {
@@ -137,8 +137,8 @@ func main() {
 			defer ticker.Stop()
 			for range ticker.C {
 				// Update Prometheus gauge metrics
-				metrics.UpdateGauge(*gaugeVec, config.MaxCardinality)
-				metrics.UpdateGauge(*cardinalityVec, config.MaxCardinality)
+				metrics.UpdateGauge(gaugeVec, config.MaxCardinality)
+				metrics.UpdateGauge(cardinalityVec, config.MaxCardinality)
 
 				for _, query := range config.Queries {
 					startTime := time.Now()
