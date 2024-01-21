@@ -86,53 +86,53 @@ resource "aws_instance" "benchmark_client" {
   key_name = aws_key_pair.deployer.key_name
 
   user_data = <<-EOT
-              #!/bin/bash
+    #!/bin/bash
 
-              # Install Docker
-              sudo apt update
-              sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
-              curl -fsSL https://get.docker.com -o get-docker.sh
-              sudo sh get-docker.sh
-              sudo usermod -aG docker $USER
-              sudo systemctl start docker
-              sudo systemctl enable docker
+    # Install Docker
+    sudo apt update
+    sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sudo sh get-docker.sh
+    sudo usermod -aG docker $USER
+    sudo systemctl start docker
+    sudo systemctl enable docker
 
-              # Copy Dockerfile to the instance
-              cat <<EOF > Dockerfile
-              FROM golang:1.21.5
+    # Copy Dockerfile to the instance
+    cat <<EOF > Dockerfile
+    FROM golang:1.21.5
 
-              # Set the working directory inside the container
-              WORKDIR /app
+    # Set the working directory inside the container
+    WORKDIR /app
 
-              # Copy only the necessary files to the container
-              COPY benchmark.go .
-              COPY config.json .
-              COPY go.mod .
-              COPY go.sum .
+    # Copy only the necessary files to the container
+    COPY benchmark.go .
+    COPY config.json .
+    COPY go.mod .
+    COPY go.sum .
 
-              # Download and install Go module dependencies
-              RUN go mod download
+    # Download and install Go module dependencies
+    RUN go mod download
 
-              # Build the Go application
-              RUN go build -o benchmark
+    # Build the Go application
+    RUN go build -o benchmark
 
-              # Expose the port your application listens on
-              EXPOSE 8081
+    # Expose the port your application listens on
+    EXPOSE 8081
 
-              # Run the binary built above
-              CMD ["./benchmark"]
-              EOF
+    # Run the binary built above
+    CMD ["./benchmark"]
+    EOF
 
-              # Build and run the Docker image
-              sudo docker build -t prombench .
-              sudo docker run -d -p 8081:8081 --name benchmark_instance prombench
-              EOT
+    # Build and run the Docker image
+    sudo docker build -t prombench .
+    sudo docker run -d -p 8081:8081 --name benchmark_instance prombench
+    EOT
   tags = {
     Name = "Benchmarking Client"
   }
 }
 
-resource "terraform_data" "add_ip_to_script" {
+resource "terraform_data" "add_ip_to_config_json" {
   provisioner "local-exec" {
     interpreter = ["bash", "-exc"]
     command = <<-EOT
@@ -145,53 +145,51 @@ resource "terraform_data" "add_ip_to_script" {
 resource "local_file" "startup_sut" {
   file_permission = "0666"
   content = <<-EOT
-  #!/bin/bash
+    #!/bin/bash
 
-  # Install Docker
-  sudo apt update
-  sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
-  curl -fsSL https://get.docker.com -o get-docker.sh
-  sudo sh get-docker.sh
-  sudo usermod -aG docker $USER
-  sudo systemctl start docker
-  sudo systemctl enable docker
+    # Install Docker
+    sudo apt update
+    sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sudo sh get-docker.sh
+    sudo usermod -aG docker $USER
+    sudo systemctl start docker
+    sudo systemctl enable docker
 
-  # Create Prometheus configuration file
-  sudo mkdir -p /etc/prometheus
-  sudo touch /etc/prometheus/prometheus.yml
+    # Create Prometheus configuration file
+    sudo mkdir -p /etc/prometheus
+    sudo touch /etc/prometheus/prometheus.yml
 
-  # Append Prometheus configuration to the file
-  echo "global:" | sudo tee -a /etc/prometheus/prometheus.yml
-  echo "  scrape_interval: 15s" | sudo tee -a /etc/prometheus/prometheus.yml
-  echo "" | sudo tee -a /etc/prometheus/prometheus.yml
-  echo "scrape_configs:" | sudo tee -a /etc/prometheus/prometheus.yml
-  echo "  - job_name: 'benchmarking_client'" | sudo tee -a /etc/prometheus/prometheus.yml
-  echo "    static_configs:" | sudo tee -a /etc/prometheus/prometheus.yml
-  echo "      - targets: ['${aws_instance.benchmark_client.public_ip}:8081']" | sudo tee -a /etc/prometheus/prometheus.yml
+    # Append Prometheus configuration to the file
+    echo "global:" | sudo tee -a /etc/prometheus/prometheus.yml
+    echo "  scrape_interval: 15s" | sudo tee -a /etc/prometheus/prometheus.yml
+    echo "" | sudo tee -a /etc/prometheus/prometheus.yml
+    echo "scrape_configs:" | sudo tee -a /etc/prometheus/prometheus.yml
+    echo "  - job_name: 'benchmarking_client'" | sudo tee -a /etc/prometheus/prometheus.yml
+    echo "    static_configs:" | sudo tee -a /etc/prometheus/prometheus.yml
+    echo "      - targets: ['${aws_instance.benchmark_client.public_ip}:8081']" | sudo tee -a /etc/prometheus/prometheus.yml
 
-  # Run Prometheus container
-  sudo docker run -d \
-       --name prometheus \
-       -p 9090:9090 \
-       -v /etc/prometheus:/etc/prometheus \
-       -v /prometheus:/prometheus \
-       prom/prometheus
+    # Run Prometheus container
+    sudo docker run -d \
+         --name prometheus \
+         -p 9090:9090 \
+         -v /etc/prometheus:/etc/prometheus \
+         -v /prometheus:/prometheus \
+         prom/prometheus
 
-  # Adjust permissions
-  sudo chmod -R 777 /prometheus
+    # Adjust permissions
+    sudo chmod -R 777 /prometheus
 
-  # Restart Prometheus container
-  sudo docker restart prometheus
+    # Restart Prometheus container
+    sudo docker restart prometheus
 
-  echo "Prometheus setup completed successfully!"
-
-  EOT
+    echo "Prometheus setup completed successfully!"
+    EOT
   filename = "${path.module}/startup_sut.sh"
 
   depends_on = [aws_instance.benchmark_client]
 
 }
-
 
 # Create EC2 instance and deploy Prometheus on it
 resource "aws_instance" "prometheus_server" {
@@ -208,37 +206,51 @@ resource "aws_instance" "prometheus_server" {
   }
   depends_on = [aws_instance.benchmark_client]
 }
-# Write script to a temporary file
-resource "local_file" "prometheus_target_update" {
-  content  = <<-EOT
-    #!/bin/bash
-    PROMETHEUS_CONFIG="/etc/prometheus/prometheus.yml"
-    PROMETHEUS_SERVER_IP="$1"
 
-    # Generate Prometheus configuration
-    echo "  - job_name: 'prometheus'" | sudo tee -a "$PROMETHEUS_CONFIG"
-    echo "    static_configs:" | sudo tee -a "$PROMETHEUS_CONFIG"
-    echo "      - targets: ['$PROMETHEUS_SERVER_IP:9090']" | sudo tee -a "$PROMETHEUS_CONFIG"
-    echo "" | sudo tee -a "$PROMETHEUS_CONFIG"
-
-    # Restart Prometheus
-    sudo docker restart prometheus
-
-    echo "Prometheus setup completed successfully!"
-
-    # wait 3 minutes to let everything set up
-  EOT
-  filename = "${path.module}/prometheus_setup.sh"
+# Waiting time to let instances set up completely
+resource "terraform_data" "wait" {
+  provisioner "local-exec" {
+    command = "sleep 180"
+  }
+  depends_on = [aws_instance.prometheus_server]
 }
 
-
+## Write script to a temporary file
+#resource "local_file" "prometheus_target_update" {
+#  file_permission = "0666"
+#  content  = <<-EOT
+#    #!/bin/bash
+#    PROMETHEUS_CONFIG="/etc/prometheus/prometheus.yml"
+#    PROMETHEUS_SERVER_IP="$1"
+#
+#    # Generate Prometheus configuration
+#    echo "  - job_name: 'prometheus'" | sudo tee -a "$PROMETHEUS_CONFIG"
+#    echo "    static_configs:" | sudo tee -a "$PROMETHEUS_CONFIG"
+#    echo "      - targets: ['$PROMETHEUS_SERVER_IP:9090']" | sudo tee -a "$PROMETHEUS_CONFIG"
+#    echo "" | sudo tee -a "$PROMETHEUS_CONFIG"
+#
+#    # Restart Prometheus
+#    sudo docker restart prometheus
+#
+#    echo "Prometheus setup completed successfully!"
+#  EOT
+#  filename = "${path.module}/prometheus_setup.sh"
+#}
 
 # ssh into Prometheus instance and set target to itself to scape own performance
 resource "terraform_data" "prometheus_setup" {
   provisioner "local-exec" {
-    command = "sleep 180"
+    command = <<-EOT
+        ssh -o StrictHostKeyChecking=no -i ${aws_key_pair.deployer.key_name}.pem admin@${aws_instance.prometheus_server.public_ip} 'bash -s' <<EOF
+        echo "  - job_name: 'prometheus'" | sudo tee -a /etc/prometheus/prometheus.yml
+        echo "    static_configs:" | sudo tee -a /etc/prometheus/prometheus.yml
+        echo "      - targets: ['${aws_instance.prometheus_server.public_ip}:9090']" | sudo tee -a /etc/prometheus/prometheus.yml
+        echo "" | sudo tee -a /etc/prometheus/prometheus.yml
+        sudo docker restart prometheus
+        EOF
+    EOT
   }
-  depends_on = [local_file.prometheus_target_update, aws_instance.prometheus_server]
+  depends_on = [aws_instance.prometheus_server, terraform_data.wait]
 }
 
 ## ssh into benchmarking client instance and set it up and run it
