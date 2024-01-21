@@ -1,9 +1,9 @@
 {
-  "prometheusServer": "http://<prometheus-server>:9090",
+  "prometheusServer": "localhost:9090",
   "queries": [
     "sample_gauge"
   ],
-  "queryRatePerSecond": 10,
+  "queryRatePerSecond": -1,
   "benchmarkDurationSeconds": 60,
   "numberOfUsers": 5,
   "maxCardinality": 100

@@ -143,7 +143,6 @@ func main() {
 
 				for _, query := range config.Queries {
 					startTime := time.Now()
-					log.Println("query: ", query)
 					duration, err := queryPrometheus(query, config.PrometheusServer)
 					if err != nil {
 						log.Printf("Error querying Prometheus: %s", err)
