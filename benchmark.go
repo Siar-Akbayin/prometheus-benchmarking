@@ -4,10 +4,11 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -49,13 +50,13 @@ func queryPrometheus(query string, prometheusServer string) (float64, error) {
 		return 0, err
 	}
 	defer response.Body.Close()
-	_, err = ioutil.ReadAll(response.Body)
+	_, err = io.ReadAll(response.Body)
 	if err != nil {
 		return 0, err
 	}
 	duration := time.Since(startTime).Seconds()
 
-	return duration, nil
+	return duration * 1000, nil
 }
 
 // constructQueryWithCardinality function
@@ -97,18 +98,18 @@ func main() {
 	// Construct the filename with the number of requests per second and benchmark duration
 	filename := fmt.Sprintf("query_benchmark_results_%dreqs_%dsecs.csv", config.QueryRatePerSecond, config.BenchmarkDurationSeconds)
 
-	// Setup CSV file for results
+	// Open file for writing
 	file, err := os.Create(filename)
 	if err != nil {
 		log.Fatal("Could not create CSV file", err)
 	}
 	defer file.Close()
 
+	// Write CSV header
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
-
-	// Write CSV header
-	writer.Write([]string{"Timestamp", "Query", "Duration (Seconds)"})
+	header := []string{"Timestamp", "Cardinality", "Duration (Milliseconds)"}
+	writer.Write(header)
 
 	// Channel and WaitGroup for goroutines
 	results := make(chan [3]string)
@@ -142,13 +143,14 @@ func main() {
 
 				for _, query := range config.Queries {
 					startTime := time.Now()
+					log.Println("query: ", query)
 					duration, err := queryPrometheus(query, config.PrometheusServer)
 					if err != nil {
 						log.Printf("Error querying Prometheus: %s", err)
 						continue
 					}
 					timestamp := startTime.Format(time.RFC3339)
-					results <- [3]string{timestamp, query, fmt.Sprintf("%.4f", duration)}
+					results <- [3]string{timestamp, strconv.Itoa(config.MaxCardinality), fmt.Sprintf("%.0f", duration)}
 				}
 			}
 		}()
