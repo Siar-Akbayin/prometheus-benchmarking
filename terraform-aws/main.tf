@@ -33,7 +33,7 @@ terraform {
 
 resource "aws_key_pair" "deployer" {
   key_name   = "aws"
-  public_key = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAACAQDKVcO6lwQXlMyGqAWmKOfp0xc5v7UZSB5rLdzx+m9s8DuYB8vGCzXRF/lu6gA2LlXNeQoZoppoOi6IzMUAsszLOq8Q8NXIb3S5yDqVwK//FoNWOroU5SI9WsXYpvoZLe6PEgKjRIpj1+STWSEht6CMRCCu5GxqGlCkuGuDKjwkFxK+VafJBk9VK/9+GIdTNDcHwfjsiCQ+9VPPPAz0gMZjcGx5oT7TNzHWQsw/I2FI+jsXvg7y4JUE1MBUDKWu9wraFoKiCfCO3cbDnqhLz2Y7rNHXST1beWex43oQDVPEr+XQttUi+l0SBxz/W2sV7QaRh0kO2Vxi7QPW/wypNV3v0ixsFfqrtHKWIFBA/83BNFVLbkLrdplakfyrXg1Xcowr34Y575TyfmvvBHlgJftXOiKmkxjYsBawt3ptx4y7sqz0FhJLCdnx7J8gwNboWo7N9IdesQLsgE09HyaQ2DE4CcO7LQm74jt51eKICveG7bN2lN/U7qLuu5q0ponqBBQxicW2dcLC2Qz4UleimJAwqOqTVO8o5Bo/XJshh1Bf7NdZm/lDGYyqa0jIKetTXzRNAtsUk43LMyM7Jm1qhh/5e7svKqt7qvuxQIrVAL85zOO7zH3qSmK6XMmyG0BJTy/oDgUjt9Ob+ErxEkN1rrFbYXW7cFkz7T65mZm83VoAww== Siar@MacBook-Pro-929.fritz.box"
+  public_key = var.public_key
 }
 
 # Create a new VPC
@@ -85,20 +85,62 @@ resource "aws_instance" "benchmark_client" {
   vpc_security_group_ids = [aws_security_group.my-security-group-csb.id]
   key_name = aws_key_pair.deployer.key_name
 
+  user_data = <<-EOT
+              #!/bin/bash
+
+              # Install Docker
+              sudo apt update
+              sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+              curl -fsSL https://get.docker.com -o get-docker.sh
+              sudo sh get-docker.sh
+              sudo usermod -aG docker $USER
+              sudo systemctl start docker
+              sudo systemctl enable docker
+
+              # Copy Dockerfile to the instance
+              cat <<EOF > Dockerfile
+              FROM golang:1.21.5
+
+              # Set the working directory inside the container
+              WORKDIR /app
+
+              # Copy only the necessary files to the container
+              COPY benchmark.go .
+              COPY config.json .
+              COPY go.mod .
+              COPY go.sum .
+
+              # Download and install Go module dependencies
+              RUN go mod download
+
+              # Build the Go application
+              RUN go build -o benchmark
+
+              # Expose the port your application listens on
+              EXPOSE 8081
+
+              # Run the binary built above
+              CMD ["./benchmark"]
+              EOF
+
+              # Build and run the Docker image
+              sudo docker build -t prombench .
+              sudo docker run -d -p 8081:8081 --name benchmark_instance prombench
+              EOT
   tags = {
     Name = "Benchmarking Client"
   }
 }
 
-#resource "terraform_data" "add_ip_to_script" {
-#  provisioner "local-exec" {
-#    interpreter = ["bash", "-exc"]
-#    command = <<-EOT
-#      awk 'NR==2 {sub(/localhost/, ${aws_instance.benchmark_client.public_ip})}1' startup_sut.sh > temp_file && mv temp_file startup_sut.sh
-#    EOT
-#  }
-#  depends_on = [aws_instance.benchmark_client]
-#}
+resource "terraform_data" "add_ip_to_script" {
+  provisioner "local-exec" {
+    interpreter = ["bash", "-exc"]
+    command = <<-EOT
+      awk 'NR==2 {sub(/localhost/, ${aws_instance.benchmark_client.public_ip})}1' ../config.json > temp_file && mv temp_file ../config.json
+    EOT
+  }
+  depends_on = [aws_instance.benchmark_client]
+}
 
 resource "local_file" "startup_sut" {
   file_permission = "0666"
@@ -143,7 +185,7 @@ resource "local_file" "startup_sut" {
 
   echo "Prometheus setup completed successfully!"
 
-    EOT
+  EOT
   filename = "${path.module}/startup_sut.sh"
 
   depends_on = [aws_instance.benchmark_client]
@@ -166,7 +208,6 @@ resource "aws_instance" "prometheus_server" {
   }
   depends_on = [aws_instance.benchmark_client]
 }
-
 # Write script to a temporary file
 resource "local_file" "prometheus_target_update" {
   content  = <<-EOT
@@ -184,24 +225,69 @@ resource "local_file" "prometheus_target_update" {
     sudo docker restart prometheus
 
     echo "Prometheus setup completed successfully!"
+
+    # wait 3 minutes to let everything set up
   EOT
   filename = "${path.module}/prometheus_setup.sh"
 }
 
+
+
 # ssh into Prometheus instance and set target to itself to scape own performance
 resource "terraform_data" "prometheus_setup" {
   provisioner "local-exec" {
-    command = <<-EOT
-      ssh -i "${aws_key_pair.deployer.key_name}.pem" admin@${aws_instance.prometheus_server.public_ip} 'bash -s' <<EOF
-        # Your script content here
-        echo "  - job_name: 'prometheus'" | sudo tee -a /etc/prometheus/prometheus.yml
-        echo "    static_configs:" | sudo tee -a /etc/prometheus/prometheus.yml
-        echo "      - targets: ['${aws_instance.prometheus_server.public_ip}:9090']" | sudo tee -a /etc/prometheus/prometheus.yml
-        echo "" | sudo tee -a /etc/prometheus/prometheus.yml
-        sudo docker restart prometheus
-    EOT
+    command = "sleep 180"
   }
   depends_on = [local_file.prometheus_target_update, aws_instance.prometheus_server]
 }
 
+## ssh into benchmarking client instance and set it up and run it
+#resource "terraform_data" "prometheus_setup" {
+#  provisioner "local-exec" {
+#    command = <<-EOT
+#      ssh -i -o StrictHostKeyChecking=no ${aws_key_pair.deployer.key_name}.pem admin@${aws_instance.benchmark_client.public_ip} 'bash -s' <<EOF
+#      #!/bin/bash
+#
+#      # Install Docker
+#      sudo apt update
+#      sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+#      curl -fsSL https://get.docker.com -o get-docker.sh
+#      sudo sh get-docker.sh
+#      sudo usermod -aG docker $USER
+#      sudo systemctl start docker
+#      sudo systemctl enable docker
+#
+#      # Copy Dockerfile to the instance
+#      cat <<EOF > Dockerfile
+#      FROM golang:1.21.5
+#
+#      # Set the working directory inside the container
+#      WORKDIR /app
+#
+#      # Copy only the necessary files to the container
+#      COPY benchmark.go .
+#      COPY config.json .
+#      COPY go.mod .
+#      COPY go.sum .
+#
+#      # Download and install Go module dependencies
+#      RUN go mod download
+#
+#      # Build the Go application
+#      RUN go build -o benchmark
+#
+#      # Expose the port your application listens on
+#      EXPOSE 8081
+#
+#      # Run the binary built above
+#      CMD ["./benchmark"]
+#      EOF
+#
+#      # Build and run the Docker image
+#      sudo docker build -t prombench .
+#      sudo docker run -d -p 8081:8081 --name benchmark_instance prombench
+#      EOT
+#  }
+#  depends_on = [local_file.prometheus_target_update, aws_instance.prometheus_server, terraform_data.prometheus_setup]
+#}
 
