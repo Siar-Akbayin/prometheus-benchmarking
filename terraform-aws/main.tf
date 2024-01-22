@@ -142,6 +142,8 @@ resource "terraform_data" "add_ip_to_config_json" {
   depends_on = [aws_instance.benchmark_client]
 }
 
+# @TODO Add script which pushes the new config.json to the GitHub repository, creates a docker image (prombench:latest) locally and pushes it to the ghcr
+
 resource "local_file" "startup_sut" {
   file_permission = "0666"
   content = <<-EOT
@@ -254,10 +256,10 @@ resource "terraform_data" "prometheus_setup" {
 }
 
 ## ssh into benchmarking client instance and set it up and run it
-#resource "terraform_data" "prometheus_setup" {
+#resource "terraform_data" "benchmarking_client_setup" {
 #  provisioner "local-exec" {
 #    command = <<-EOT
-#      ssh -i -o StrictHostKeyChecking=no ${aws_key_pair.deployer.key_name}.pem admin@${aws_instance.benchmark_client.public_ip} 'bash -s' <<EOF
+#      ssh -o StrictHostKeyChecking=no -i ${aws_key_pair.deployer.key_name}.pem admin@${aws_instance.benchmark_client.public_ip} 'bash -s' <<EOF
 #      #!/bin/bash
 #
 #      # Install Docker
@@ -298,8 +300,44 @@ resource "terraform_data" "prometheus_setup" {
 #      # Build and run the Docker image
 #      sudo docker build -t prombench .
 #      sudo docker run -d -p 8081:8081 --name benchmark_instance prombench
+#      EOF
 #      EOT
 #  }
-#  depends_on = [local_file.prometheus_target_update, aws_instance.prometheus_server, terraform_data.prometheus_setup]
+#  depends_on = [terraform_data.wait, aws_instance.prometheus_server, terraform_data.prometheus_setup]
 #}
+
+resource "null_resource" "benchmarking_client_setup" {
+  provisioner "remote-exec" {
+    inline = [
+      "sudo apt update",
+      "sudo apt install -y apt-transport-https ca-certificates curl software-properties-common",
+      "curl -fsSL https://get.docker.com -o get-docker.sh",
+      "sudo sh get-docker.sh",
+      "sudo usermod -aG docker $USER",
+      "sudo systemctl start docker",
+      "sudo systemctl enable docker",
+      "sudo mkdir -p /app",  # Create a directory on the instance (if not already present)
+      "sudo chown -R admin:admin /app",  # Change ownership to the desired user (replace 'admin' with the actual username)
+
+      # Pull the Docker image from the registry
+      "sudo docker pull ghcr.io/siar-akbayin/prombench:latest",
+
+
+      # Build and run Docker container
+      "sudo docker run -d -p 8081:8081 --name benchmark_instance ghcr.io/siar-akbayin/prombench:latest"
+    ]
+
+    connection {
+      type        = "ssh"
+      user        = "admin"  # Update with your SSH user
+      private_key = file("${path.module}/${aws_key_pair.deployer.key_name}.pem")  # Update with the path to your private key
+      host        = aws_instance.benchmark_client.public_ip
+    }
+  }
+
+  depends_on = [terraform_data.wait, aws_instance.prometheus_server, terraform_data.prometheus_setup]
+}
+
+
+
 
