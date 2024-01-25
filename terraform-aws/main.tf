@@ -70,6 +70,14 @@ resource "aws_security_group" "my-security-group-csb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # Allow inbound for metrics generator
+  ingress {
+    from_port   = 8082
+    to_port     = 8082
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -78,9 +86,41 @@ resource "aws_security_group" "my-security-group-csb" {
   }
 }
 
+resource "aws_instance" "metrics_generator" {
+  ami           = "ami-0c758b376a9cf7862" # Debian 12 64-bit (Arm), username: admin
+  instance_type = "m7g.medium"
+  subnet_id     = "subnet-034cd218e2b28c58a"
+  vpc_security_group_ids = [aws_security_group.my-security-group-csb.id]
+  key_name = aws_key_pair.deployer.key_name
+
+  user_data = <<-EOT
+    #!/bin/bash
+
+    sudo apt update
+    sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
+    curl -fsSL https://get.docker.com -o get-docker.sh
+    sudo sh get-docker.sh
+    sudo usermod -aG docker $USER
+    sudo systemctl start docker
+    sudo systemctl enable docker
+    sudo mkdir -p /app  # Create a directory on the instance (if not already present)
+    sudo chown -R admin:admin /app  # Change ownership to the desired user (replace 'admin' with the actual username)
+
+    # Pull the Docker image from the registry
+    sudo docker pull ghcr.io/siar-akbayin/metricsgenerator:latest
+
+
+    # Build and run Docker container
+    sudo docker run -d -p 8082:8082 --name metricsgenerator ghcr.io/siar-akbayin/metricsgenerator:latest
+    EOT
+  tags = {
+    Name = "Metrics Generator"
+  }
+}
+
 resource "aws_instance" "benchmark_client" {
-  ami           = "ami-0ec3d9efceafb89e0" # Debian 12 x86, username: admin
-  instance_type = "t3.large"
+  ami           = "ami-0c758b376a9cf7862" # Debian 12 64-bit (Arm), username: admin
+  instance_type = "m7g.large"
   subnet_id     = "subnet-034cd218e2b28c58a"
   vpc_security_group_ids = [aws_security_group.my-security-group-csb.id]
   key_name = aws_key_pair.deployer.key_name
@@ -132,16 +172,6 @@ resource "aws_instance" "benchmark_client" {
   }
 }
 
-resource "terraform_data" "add_ip_to_config_json" {
-  provisioner "local-exec" {
-    interpreter = ["bash", "-exc"]
-    command = <<-EOT
-      awk 'NR==2 {sub(/localhost/, ${aws_instance.benchmark_client.public_ip})}1' ../config.json > temp_file && mv temp_file ../config.json
-    EOT
-  }
-  depends_on = [aws_instance.benchmark_client]
-}
-
 # @TODO Add script which pushes the new config.json to the GitHub repository, creates a docker image (prombench:latest) locally and pushes it to the ghcr
 
 resource "local_file" "startup_sut" {
@@ -167,9 +197,9 @@ resource "local_file" "startup_sut" {
     echo "  scrape_interval: 15s" | sudo tee -a /etc/prometheus/prometheus.yml
     echo "" | sudo tee -a /etc/prometheus/prometheus.yml
     echo "scrape_configs:" | sudo tee -a /etc/prometheus/prometheus.yml
-    echo "  - job_name: 'benchmarking_client'" | sudo tee -a /etc/prometheus/prometheus.yml
+    echo "  - job_name: 'metrics_generator'" | sudo tee -a /etc/prometheus/prometheus.yml
     echo "    static_configs:" | sudo tee -a /etc/prometheus/prometheus.yml
-    echo "      - targets: ['${aws_instance.benchmark_client.public_ip}:8081']" | sudo tee -a /etc/prometheus/prometheus.yml
+    echo "      - targets: ['${aws_instance.metrics_generator.public_ip}:8082']" | sudo tee -a /etc/prometheus/prometheus.yml
 
     # Run Prometheus container
     sudo docker run -d \
@@ -189,14 +219,14 @@ resource "local_file" "startup_sut" {
     EOT
   filename = "${path.module}/startup_sut.sh"
 
-  depends_on = [aws_instance.benchmark_client]
+  depends_on = [aws_instance.benchmark_client, aws_instance.metrics_generator]
 
 }
 
 # Create EC2 instance and deploy Prometheus on it
 resource "aws_instance" "prometheus_server" {
-  ami           = "ami-0ec3d9efceafb89e0" # Debian 12 x86, username: admin
-  instance_type = "t3.medium"
+  ami           = "ami-0c758b376a9cf7862" # Debian 12 64-bit (Arm), username: admin
+  instance_type = "m7g.medium"
   subnet_id     = "subnet-034cd218e2b28c58a"
   vpc_security_group_ids = [aws_security_group.my-security-group-csb.id]
   key_name = aws_key_pair.deployer.key_name
@@ -215,6 +245,14 @@ resource "terraform_data" "wait" {
     command = "sleep 180"
   }
   depends_on = [aws_instance.prometheus_server]
+}
+
+resource "terraform_data" "add_ip_to_config_json" {
+  provisioner "local-exec" {
+    interpreter = ["bash", "-exc"]
+    command = "awk -v ip=${aws_instance.prometheus_server.public_ip} 'NR==2 {sub(/localhost/, ip)}1' ../config.json > temp_file && mv temp_file ../config.json"
+  }
+  depends_on = [aws_instance.prometheus_server, terraform_data.wait]
 }
 
 ## Write script to a temporary file
