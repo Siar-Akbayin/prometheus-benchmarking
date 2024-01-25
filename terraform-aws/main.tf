@@ -78,6 +78,14 @@ resource "aws_security_group" "my-security-group-csb" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
+  # Allow inbound for benchmarking tool
+  ingress {
+    from_port   = 8081
+    to_port     = 8081
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
   egress {
     from_port   = 0
     to_port     = 0
@@ -172,7 +180,7 @@ resource "aws_instance" "benchmark_client" {
   }
 }
 
-# @TODO Add script which pushes the new config.json to the GitHub repository, creates a docker image (prombench:latest) locally and pushes it to the ghcr
+# @TODO Add script which uses the local config.json to creates a docker image (ghcr.io/siar-akbayin/prombench:latest) locally and pushes it to the ghcr
 
 resource "local_file" "startup_sut" {
   file_permission = "0666"

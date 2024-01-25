@@ -1,10 +1,23 @@
 {
-  "prometheusServer": "localhost:9090",
-  "queries": [
-    "sample_gauge"
-  ],
-  "queryRatePerSecond": -1,
-  "benchmarkDurationSeconds": 60,
-  "numberOfUsers": 5,
-  "maxCardinality": 100
+  "prometheusServer": "http://localhost:9090",
+  "experiments": [
+    {
+      "queries": [
+        "sample_gauge"
+      ],
+      "queryRatePerSecond": -1,
+      "benchmarkDurationSeconds": 60,
+      "numberOfUsers": 1000,
+      "maxCardinality": 1
+    },
+    {
+      "queries": [
+        "sample_gauge"
+      ],
+      "queryRatePerSecond": -1,
+      "benchmarkDurationSeconds": 60,
+      "numberOfUsers": 1000,
+      "maxCardinality": 999
+    }
+  ]
 }
