@@ -12,8 +12,6 @@ import (
 	"strings"
 	"sync"
 	"time"
-
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 // Experiment structure
@@ -75,12 +73,6 @@ func main() {
 		log.Fatal("Could not decode config file", err)
 	}
 
-	// Start Prometheus HTTP server for metric scraping
-	go func() {
-		http.Handle("/metrics", promhttp.Handler())
-		log.Fatal(http.ListenAndServe(":8081", nil))
-	}()
-
 	for _, experiment := range config.Experiments {
 		// Construct the filename based on experiment parameters
 		filename := fmt.Sprintf("query_benchmark_results_%dreqs_%dsecs_%dusers_%dcard.csv",
@@ -132,6 +124,7 @@ func main() {
 					select {
 					case <-ticker.C:
 						for _, query := range experiment.Queries {
+							fmt.Printf("Querying: %s\n", query) // Add this line to print the query
 							startTime := time.Now()
 							duration, err := queryPrometheus(query, config.PrometheusServer)
 							if err != nil {
