@@ -5,19 +5,100 @@
       "queries": [
         "sample_gauge"
       ],
-      "queryRatePerSecond": -1,
-      "benchmarkDurationSeconds": 60,
-      "numberOfUsers": 1000,
+      "queryRatePerSecond": 100,
+      "benchmarkDurationSeconds": 30,
+      "numberOfUsers": 100,
       "maxCardinality": 1
     },
     {
       "queries": [
         "sample_gauge"
       ],
+      "queryRatePerSecond": 100,
+      "benchmarkDurationSeconds": 30,
+      "numberOfUsers": 100,
+      "maxCardinality": 10
+    },
+    {
+      "queries": [
+        "sample_gauge"
+      ],
+      "queryRatePerSecond": 100,
+      "benchmarkDurationSeconds": 30,
+      "numberOfUsers": 100,
+      "maxCardinality": 100
+    },
+    {
+      "queries": [
+        "sample_gauge"
+      ],
+      "queryRatePerSecond": 100,
+      "benchmarkDurationSeconds": 30,
+      "numberOfUsers": 100,
+      "maxCardinality": 1000
+    },
+    {
+      "queries": [
+        "sample_gauge"
+      ],
+      "queryRatePerSecond": 100,
+      "benchmarkDurationSeconds": 30,
+      "numberOfUsers": 100,
+      "maxCardinality": 3000
+    },
+    {
+      "queries": [
+        "sample_gauge"
+      ],
+      "queryRatePerSecond": 500,
+      "benchmarkDurationSeconds": 30,
+      "numberOfUsers": 10,
+      "maxCardinality": 1
+    },
+    {
+      "queries": [
+        "sample_gauge"
+      ],
+      "queryRatePerSecond": 500,
+      "benchmarkDurationSeconds": 30,
+      "numberOfUsers": 10,
+      "maxCardinality": 10
+    },
+    {
+      "queries": [
+        "sample_gauge"
+      ],
+      "queryRatePerSecond": 500,
+      "benchmarkDurationSeconds": 30,
+      "numberOfUsers": 10,
+      "maxCardinality": 100
+    },
+    {
+      "queries": [
+        "sample_gauge"
+      ],
+      "queryRatePerSecond": 500,
+      "benchmarkDurationSeconds": 30,
+      "numberOfUsers": 10,
+      "maxCardinality": 1000
+    },
+    {
+      "queries": [
+        "sample_gauge"
+      ],
+      "queryRatePerSecond": 500,
+      "benchmarkDurationSeconds": 30,
+      "numberOfUsers": 10,
+      "maxCardinality": 3000
+    },
+    {
+      "queries": [
+        "sample_gauge"
+      ],
       "queryRatePerSecond": -1,
-      "benchmarkDurationSeconds": 60,
-      "numberOfUsers": 1000,
-      "maxCardinality": 999
+      "benchmarkDurationSeconds": 30,
+      "numberOfUsers": 10,
+      "maxCardinality": 3000
     }
   ]
 }

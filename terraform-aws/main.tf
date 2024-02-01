@@ -51,7 +51,7 @@ resource "aws_key_pair" "deployer" {
 
 # Create a security group
 resource "aws_security_group" "my-security-group-csb" {
-  name   = "my-security-group"
+  name   = "my-security-group-csb"
   vpc_id = "vpc-0ecaaa86c9a76e267"
 
   # Allow inbound SSH
@@ -96,7 +96,7 @@ resource "aws_security_group" "my-security-group-csb" {
 
 resource "aws_instance" "metrics_generator" {
   ami           = "ami-0c758b376a9cf7862" # Debian 12 64-bit (Arm), username: admin
-  instance_type = "m7g.medium"
+  instance_type = "m7g.large"
   subnet_id     = "subnet-034cd218e2b28c58a"
   vpc_security_group_ids = [aws_security_group.my-security-group-csb.id]
   key_name = aws_key_pair.deployer.key_name
@@ -180,8 +180,6 @@ resource "aws_instance" "benchmark_client" {
   }
 }
 
-# @TODO Add script which uses the local config.json to creates a docker image (ghcr.io/siar-akbayin/prombench:latest) locally and pushes it to the ghcr
-
 resource "local_file" "startup_sut" {
   file_permission = "0666"
   content = <<-EOT
@@ -234,7 +232,7 @@ resource "local_file" "startup_sut" {
 # Create EC2 instance and deploy Prometheus on it
 resource "aws_instance" "prometheus_server" {
   ami           = "ami-0c758b376a9cf7862" # Debian 12 64-bit (Arm), username: admin
-  instance_type = "m7g.medium"
+  instance_type = "m7g.large"
   subnet_id     = "subnet-034cd218e2b28c58a"
   vpc_security_group_ids = [aws_security_group.my-security-group-csb.id]
   key_name = aws_key_pair.deployer.key_name
@@ -250,7 +248,7 @@ resource "aws_instance" "prometheus_server" {
 # Waiting time to let instances set up completely
 resource "terraform_data" "wait" {
   provisioner "local-exec" {
-    command = "sleep 180"
+    command = "sleep 60"
   }
   depends_on = [aws_instance.prometheus_server]
 }
@@ -260,30 +258,17 @@ resource "terraform_data" "add_ip_to_config_json" {
     interpreter = ["bash", "-exc"]
     command = "awk -v ip=${aws_instance.prometheus_server.public_ip} 'NR==2 {sub(/localhost/, ip)}1' ../config.json > temp_file && mv temp_file ../config.json"
   }
-  depends_on = [aws_instance.prometheus_server, terraform_data.wait]
+  depends_on = [terraform_data.wait]
 }
 
-## Write script to a temporary file
-#resource "local_file" "prometheus_target_update" {
-#  file_permission = "0666"
-#  content  = <<-EOT
-#    #!/bin/bash
-#    PROMETHEUS_CONFIG="/etc/prometheus/prometheus.yml"
-#    PROMETHEUS_SERVER_IP="$1"
-#
-#    # Generate Prometheus configuration
-#    echo "  - job_name: 'prometheus'" | sudo tee -a "$PROMETHEUS_CONFIG"
-#    echo "    static_configs:" | sudo tee -a "$PROMETHEUS_CONFIG"
-#    echo "      - targets: ['$PROMETHEUS_SERVER_IP:9090']" | sudo tee -a "$PROMETHEUS_CONFIG"
-#    echo "" | sudo tee -a "$PROMETHEUS_CONFIG"
-#
-#    # Restart Prometheus
-#    sudo docker restart prometheus
-#
-#    echo "Prometheus setup completed successfully!"
-#  EOT
-#  filename = "${path.module}/prometheus_setup.sh"
-#}
+# build and push benchmarking client image
+resource "terraform_data" "build_and_push_image" {
+  provisioner "local-exec" {
+    interpreter = ["bash", "-exc"]
+    command = "echo ${var.sudo_pw} | sudo -S docker build -t ghcr.io/siar-akbayin/prombench:latest ../ &&  sudo -S docker push ghcr.io/siar-akbayin/prombench:latest"
+  }
+  depends_on = [terraform_data.add_ip_to_config_json]
+}
 
 # ssh into Prometheus instance and set target to itself to scape own performance
 resource "terraform_data" "prometheus_setup" {
@@ -298,61 +283,11 @@ resource "terraform_data" "prometheus_setup" {
         EOF
     EOT
   }
-  depends_on = [aws_instance.prometheus_server, terraform_data.wait]
+  depends_on = [terraform_data.build_and_push_image]
 }
 
-## ssh into benchmarking client instance and set it up and run it
-#resource "terraform_data" "benchmarking_client_setup" {
-#  provisioner "local-exec" {
-#    command = <<-EOT
-#      ssh -o StrictHostKeyChecking=no -i ${aws_key_pair.deployer.key_name}.pem admin@${aws_instance.benchmark_client.public_ip} 'bash -s' <<EOF
-#      #!/bin/bash
-#
-#      # Install Docker
-#      sudo apt update
-#      sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
-#      curl -fsSL https://get.docker.com -o get-docker.sh
-#      sudo sh get-docker.sh
-#      sudo usermod -aG docker $USER
-#      sudo systemctl start docker
-#      sudo systemctl enable docker
-#
-#      # Copy Dockerfile to the instance
-#      cat <<EOF > Dockerfile
-#      FROM golang:1.21.5
-#
-#      # Set the working directory inside the container
-#      WORKDIR /app
-#
-#      # Copy only the necessary files to the container
-#      COPY benchmark.go .
-#      COPY config.json .
-#      COPY go.mod .
-#      COPY go.sum .
-#
-#      # Download and install Go module dependencies
-#      RUN go mod download
-#
-#      # Build the Go application
-#      RUN go build -o benchmark
-#
-#      # Expose the port your application listens on
-#      EXPOSE 8081
-#
-#      # Run the binary built above
-#      CMD ["./benchmark"]
-#      EOF
-#
-#      # Build and run the Docker image
-#      sudo docker build -t prombench .
-#      sudo docker run -d -p 8081:8081 --name benchmark_instance prombench
-#      EOF
-#      EOT
-#  }
-#  depends_on = [terraform_data.wait, aws_instance.prometheus_server, terraform_data.prometheus_setup]
-#}
 
-resource "null_resource" "benchmarking_client_setup" {
+resource "terraform_data" "benchmarking_client_setup" {
   provisioner "remote-exec" {
     inline = [
       "sudo apt update",
@@ -368,22 +303,60 @@ resource "null_resource" "benchmarking_client_setup" {
       # Pull the Docker image from the registry
       "sudo docker pull ghcr.io/siar-akbayin/prombench:latest",
 
+      # Wait for pull
+      "sleep 20",
 
       # Build and run Docker container
-      "sudo docker run -d -p 8081:8081 --name benchmark_instance ghcr.io/siar-akbayin/prombench:latest"
+      "sudo docker run -d -p 8081:8081 --name benchmark_instance ghcr.io/siar-akbayin/prombench:latest",
+
+      # Restart container
+      "sudo docker restart benchmark_instance"
     ]
 
     connection {
       type        = "ssh"
-      user        = "admin"  # Update with your SSH user
+      user        = "admin"  # SSH user https://alestic.com/2014/01/ec2-ssh-username/
       private_key = file("${path.module}/${aws_key_pair.deployer.key_name}.pem")  # Update with the path to your private key
       host        = aws_instance.benchmark_client.public_ip
     }
   }
 
-  depends_on = [terraform_data.wait, aws_instance.prometheus_server, terraform_data.prometheus_setup]
+  depends_on = [terraform_data.wait, aws_instance.prometheus_server, terraform_data.prometheus_setup, terraform_data.build_and_push_image]
 }
 
+resource "terraform_data" "retrieve_results" {
+  provisioner "remote-exec" {
+    inline = [
+      "sudo mkdir -p ~/csvfiles",
+      "sudo chown $(whoami) ~/csvfiles",
+      "sudo chmod 755 ~/csvfiles",
+      "sleep 500",
+      "container_id=$(sudo docker ps -aqf 'name=benchmark_instance')",
+      "sudo docker exec $container_id sh -c 'tar -cvf - /app/*.csv' | tar -xvf - -C ~/csvfiles/"
+    ]
+
+    connection {
+      type        = "ssh"
+      user        = "admin"  # SSH user https://alestic.com/2014/01/ec2-ssh-username/
+      private_key = file("${path.module}/${aws_key_pair.deployer.key_name}.pem")  # Update with the path to your private key
+      host        = aws_instance.benchmark_client.public_ip
+    }
+  }
+
+  depends_on = [terraform_data.benchmarking_client_setup]
+}
+
+resource "local_file" "retrieve_csv_files" {
+  file_permission = "0666"
+  content = <<-EOT
+    #!/bin/bash
+    scp -i ${aws_key_pair.deployer.key_name}.pem admin@${aws_instance.benchmark_client.public_ip}:'~/csvfiles/app/*' ./results
+    EOT
+  filename = "${path.module}/get_results.sh"
+
+  depends_on = [terraform_data.retrieve_results]
+
+}
 
 
 

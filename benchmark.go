@@ -124,7 +124,6 @@ func main() {
 					select {
 					case <-ticker.C:
 						for _, query := range experiment.Queries {
-							fmt.Printf("Querying: %s\n", query) // Add this line to print the query
 							startTime := time.Now()
 							duration, err := queryPrometheus(query, config.PrometheusServer)
 							if err != nil {

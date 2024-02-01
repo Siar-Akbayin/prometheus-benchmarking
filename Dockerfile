@@ -19,4 +19,4 @@ RUN go build -o benchmark
 EXPOSE 8081
 
 # Run the binary built above
-CMD ["./benchmark"]
+CMD "./benchmark" && tail -f /dev/null
