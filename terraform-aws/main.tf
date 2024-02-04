@@ -330,8 +330,8 @@ resource "terraform_data" "retrieve_results" {
       "sudo mkdir -p ~/csvfiles",
       "sudo chown $(whoami) ~/csvfiles",
       "sudo chmod 755 ~/csvfiles",
-      "sleep 500",
       "container_id=$(sudo docker ps -aqf 'name=benchmark_instance')",
+      "until sudo docker exec $container_id ls /app/benchmark_complete.flag ; do sleep 60; done",
       "sudo docker exec $container_id sh -c 'tar -cvf - /app/*.csv' | tar -xvf - -C ~/csvfiles/"
     ]
 
