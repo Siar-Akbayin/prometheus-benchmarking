@@ -11,48 +11,15 @@ terraform {
   }
 }
 
-# TLS Private Key Resource
-#resource "tls_private_key" "terrafrom_generated_private_key" {
-#  algorithm = "RSA"
-#  rsa_bits  = 4096
-#}
-
-# AWS Key Pair Resource
-#resource "aws_key_pair" "generated_key" {
-#  key_name   = "aws_key_pair"
-#  public_key = tls_private_key.terrafrom_generated_private_key.public_key_openssh
-#
-#  provisioner "local-exec" {
-#    command = <<-EOT
-#      echo '${tls_private_key.terrafrom_generated_private_key.private_key_pem}' > aws_key_pair.pem
-#      echo '${tls_private_key.terrafrom_generated_private_key.public_key_openssh}' > aws_key_pair.pem
-#      chmod 400 aws_key_pair.pem
-#    EOT
-#  }
-#}
-
 resource "aws_key_pair" "deployer" {
   key_name   = "aws"
-  public_key = var.public_key
+  public_key = file("${path.module}/aws.pem.pub")
 }
-
-# Create a new VPC
-#resource "aws_vpc" "example_vpc" {
-#  cidr_block = "10.0.0.0/16"
-#  enable_dns_hostnames = true
-#}
-
-# Create a subnet
-#resource "aws_subnet" "example_subnet" {
-#  vpc_id     = "vpc-0ecaaa86c9a76e267"
-#  cidr_block = "172.31.16.0/20"
-#  map_public_ip_on_launch = true # Enable public IP
-#}
 
 # Create a security group
 resource "aws_security_group" "my-security-group-csb" {
   name   = "my-security-group-csb"
-  vpc_id = "vpc-0ecaaa86c9a76e267"
+  vpc_id = var.vpc_id
 
   # Allow inbound SSH
   ingress {
@@ -96,8 +63,8 @@ resource "aws_security_group" "my-security-group-csb" {
 
 resource "aws_instance" "metrics_generator" {
   ami           = "ami-0c758b376a9cf7862" # Debian 12 64-bit (Arm), username: admin
-  instance_type = "m7g.large"
-  subnet_id     = "subnet-034cd218e2b28c58a"
+  instance_type = "m7g.medium"
+  subnet_id     = var.subnet_id
   vpc_security_group_ids = [aws_security_group.my-security-group-csb.id]
   key_name = aws_key_pair.deployer.key_name
 
@@ -128,8 +95,8 @@ resource "aws_instance" "metrics_generator" {
 
 resource "aws_instance" "benchmark_client" {
   ami           = "ami-0c758b376a9cf7862" # Debian 12 64-bit (Arm), username: admin
-  instance_type = "m7g.large"
-  subnet_id     = "subnet-034cd218e2b28c58a"
+  instance_type = "t4g.2xlarge"
+  subnet_id     = var.subnet_id
   vpc_security_group_ids = [aws_security_group.my-security-group-csb.id]
   key_name = aws_key_pair.deployer.key_name
 
@@ -191,7 +158,7 @@ resource "local_file" "startup_sut" {
 resource "aws_instance" "prometheus_server" {
   ami           = "ami-0c758b376a9cf7862" # Debian 12 64-bit (Arm), username: admin
   instance_type = "m7g.large"
-  subnet_id     = "subnet-034cd218e2b28c58a"
+  subnet_id     = var.subnet_id
   vpc_security_group_ids = [aws_security_group.my-security-group-csb.id]
   key_name = aws_key_pair.deployer.key_name
 
@@ -223,7 +190,7 @@ resource "terraform_data" "add_ip_to_config_json" {
 resource "terraform_data" "build_and_push_image" {
   provisioner "local-exec" {
     interpreter = ["bash", "-exc"]
-    command = "echo ${var.sudo_pw} | sudo -S docker build -t ghcr.io/siar-akbayin/prombench:latest ../ &&  sudo -S docker push ghcr.io/siar-akbayin/prombench:latest"
+    command = "echo ${var.sudo_pw} | sudo -S docker build -t ${var.container_registry_link}prombench:latest ../ &&  sudo -S docker push ${var.container_registry_link}prombench:latest"
   }
   depends_on = [terraform_data.add_ip_to_config_json]
 }
@@ -260,13 +227,13 @@ resource "terraform_data" "benchmarking_client_setup" {
       "sudo chown -R admin:admin /app",  # Changes ownership to the desired user
 
       # Pull the Docker image from the registry
-      "sudo docker pull ghcr.io/siar-akbayin/prombench:latest",
+      "sudo docker pull ${var.container_registry_link}prombench:latest",
 
       # Wait for pull
       "sleep 20",
 
       # Build and run Docker container
-      "sudo docker run -d -p 8081:8081 --name benchmark_instance ghcr.io/siar-akbayin/prombench:latest",
+      "sudo docker run -d -p 8081:8081 --name benchmark_instance ${var.container_registry_link}prombench:latest",
 
       # Restart container
       "sudo docker restart benchmark_instance"

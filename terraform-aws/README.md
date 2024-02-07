@@ -55,7 +55,7 @@ To apply this configuration:
 2. Run `terraform init` to initialize the Terraform working directory and download the required providers.
 3. Run `terraform plan` to review the changes that will be made to your infrastructure.
 4. Execute `terraform apply -auto-approve` to provision the resources on AWS as defined in this configuration.
-5. You will need to provide a Docker container registry URL where you have push access and your sudo password.
+5. You will need to provide your AWS VPC and Subnet ID, a Docker container registry URL where you have push access and your sudo password.
 
 Ensure that you have the necessary permissions in your AWS account to create and manage the resources defined in this Terraform configuration.
 

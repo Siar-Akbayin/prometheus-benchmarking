@@ -6,7 +6,7 @@
         "sample_gauge"
       ],
       "queryRatePerSecond": -1,
-      "benchmarkDurationSeconds": 600,
+      "benchmarkDurationSeconds": 300,
       "numberOfUsers": 1,
       "maxCardinality": 1,
       "iterations": 2
@@ -16,9 +16,9 @@
         "sample_gauge"
       ],
       "queryRatePerSecond": -1,
-      "benchmarkDurationSeconds": 600,
+      "benchmarkDurationSeconds": 300,
       "numberOfUsers": 1,
-      "maxCardinality": 10,
+      "maxCardinality": 50,
       "iterations": 2
     },
     {
@@ -26,9 +26,9 @@
         "sample_gauge"
       ],
       "queryRatePerSecond": -1,
-      "benchmarkDurationSeconds": 600,
+      "benchmarkDurationSeconds": 300,
       "numberOfUsers": 1,
-      "maxCardinality": 100,
+      "maxCardinality": 500,
       "iterations": 2
     },
     {
@@ -36,9 +36,9 @@
         "sample_gauge"
       ],
       "queryRatePerSecond": -1,
-      "benchmarkDurationSeconds": 600,
+      "benchmarkDurationSeconds": 300,
       "numberOfUsers": 1,
-      "maxCardinality": 1000,
+      "maxCardinality": 1500,
       "iterations": 2
     },
     {
@@ -46,7 +46,7 @@
         "sample_gauge"
       ],
       "queryRatePerSecond": -1,
-      "benchmarkDurationSeconds": 600,
+      "benchmarkDurationSeconds": 300,
       "numberOfUsers": 1,
       "maxCardinality": 3000,
       "iterations": 2
@@ -56,7 +56,7 @@
         "sample_gauge"
       ],
       "queryRatePerSecond": -1,
-      "benchmarkDurationSeconds": 600,
+      "benchmarkDurationSeconds": 300,
       "numberOfUsers": 25,
       "maxCardinality": 1,
       "iterations": 2
@@ -66,9 +66,9 @@
         "sample_gauge"
       ],
       "queryRatePerSecond": -1,
-      "benchmarkDurationSeconds": 600,
+      "benchmarkDurationSeconds": 300,
       "numberOfUsers": 25,
-      "maxCardinality": 10,
+      "maxCardinality": 50,
       "iterations": 2
     },
     {
@@ -76,9 +76,9 @@
         "sample_gauge"
       ],
       "queryRatePerSecond": -1,
-      "benchmarkDurationSeconds": 600,
+      "benchmarkDurationSeconds": 300,
       "numberOfUsers": 25,
-      "maxCardinality": 100,
+      "maxCardinality": 500,
       "iterations": 2
     },
     {
@@ -86,9 +86,9 @@
         "sample_gauge"
       ],
       "queryRatePerSecond": -1,
-      "benchmarkDurationSeconds": 600,
+      "benchmarkDurationSeconds": 300,
       "numberOfUsers": 25,
-      "maxCardinality": 1000,
+      "maxCardinality": 1500,
       "iterations": 2
     },
     {
@@ -96,7 +96,7 @@
         "sample_gauge"
       ],
       "queryRatePerSecond": -1,
-      "benchmarkDurationSeconds": 600,
+      "benchmarkDurationSeconds": 300,
       "numberOfUsers": 25,
       "maxCardinality": 3000,
       "iterations": 2
@@ -106,7 +106,7 @@
         "sample_gauge"
       ],
       "queryRatePerSecond": -1,
-      "benchmarkDurationSeconds": 600,
+      "benchmarkDurationSeconds": 300,
       "numberOfUsers": 50,
       "maxCardinality": 1,
       "iterations": 2
@@ -116,9 +116,9 @@
         "sample_gauge"
       ],
       "queryRatePerSecond": -1,
-      "benchmarkDurationSeconds": 600,
+      "benchmarkDurationSeconds": 300,
       "numberOfUsers": 50,
-      "maxCardinality": 10,
+      "maxCardinality": 50,
       "iterations": 2
     },
     {
@@ -126,9 +126,9 @@
         "sample_gauge"
       ],
       "queryRatePerSecond": -1,
-      "benchmarkDurationSeconds": 600,
+      "benchmarkDurationSeconds": 300,
       "numberOfUsers": 50,
-      "maxCardinality": 100,
+      "maxCardinality": 500,
       "iterations": 2
     },
     {
@@ -136,9 +136,9 @@
         "sample_gauge"
       ],
       "queryRatePerSecond": -1,
-      "benchmarkDurationSeconds": 600,
+      "benchmarkDurationSeconds": 300,
       "numberOfUsers": 50,
-      "maxCardinality": 1000,
+      "maxCardinality": 1500,
       "iterations": 2
     },
     {
@@ -146,7 +146,7 @@
         "sample_gauge"
       ],
       "queryRatePerSecond": -1,
-      "benchmarkDurationSeconds": 600,
+      "benchmarkDurationSeconds": 300,
       "numberOfUsers": 50,
       "maxCardinality": 3000,
       "iterations": 2
