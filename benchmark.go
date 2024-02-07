@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"strconv"
-	"strings"
 	"sync"
 	"time"
 )
@@ -45,14 +44,10 @@ func queryPrometheus(query string, prometheusServer string) (float64, error) {
 	return duration * 10000, nil
 }
 
-// Constructs a query with a specific cardinality
+// Constructs a query based on the base metric name and its cardinality
 func constructQueryWithCardinality(baseQuery string, cardinality int) string {
-	var labelFilters []string
-	for i := 0; i < cardinality; i++ {
-		labelFilter := fmt.Sprintf(`dim%d="%d"`, i+1, i+1)
-		labelFilters = append(labelFilters, labelFilter)
-	}
-	return fmt.Sprintf(`sample_gauge_%d{%s}`, cardinality, strings.Join(labelFilters, ","))
+	// Directly format the metric name with the cardinality value
+	return fmt.Sprintf("%s_%d", baseQuery, cardinality)
 }
 
 // Warmup function that performs queries without saving results
