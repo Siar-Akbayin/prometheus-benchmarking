@@ -133,48 +133,6 @@ resource "aws_instance" "benchmark_client" {
   vpc_security_group_ids = [aws_security_group.my-security-group-csb.id]
   key_name = aws_key_pair.deployer.key_name
 
-  user_data = <<-EOT
-    #!/bin/bash
-
-    # Install Docker
-    sudo apt update
-    sudo apt install -y apt-transport-https ca-certificates curl software-properties-common
-    curl -fsSL https://get.docker.com -o get-docker.sh
-    sudo sh get-docker.sh
-    sudo usermod -aG docker $USER
-    sudo systemctl start docker
-    sudo systemctl enable docker
-
-    # Copy Dockerfile to the instance
-    cat <<EOF > Dockerfile
-    FROM golang:1.21.5
-
-    # Set the working directory inside the container
-    WORKDIR /app
-
-    # Copy only the necessary files to the container
-    COPY benchmark.go .
-    COPY config.json .
-    COPY go.mod .
-    COPY go.sum .
-
-    # Download and install Go module dependencies
-    RUN go mod download
-
-    # Build the Go application
-    RUN go build -o benchmark
-
-    # Expose the port your application listens on
-    EXPOSE 8081
-
-    # Run the binary built above
-    CMD ["./benchmark"]
-    EOF
-
-    # Build and run the Docker image
-    sudo docker build -t prombench .
-    sudo docker run -d -p 8081:8081 --name benchmark_instance prombench
-    EOT
   tags = {
     Name = "Benchmarking Client"
   }
@@ -229,7 +187,7 @@ resource "local_file" "startup_sut" {
 
 }
 
-# Create EC2 instance and deploy Prometheus on it
+# Creates EC2 instance and deploys Prometheus on it
 resource "aws_instance" "prometheus_server" {
   ami           = "ami-0c758b376a9cf7862" # Debian 12 64-bit (Arm), username: admin
   instance_type = "m7g.large"
@@ -261,7 +219,7 @@ resource "terraform_data" "add_ip_to_config_json" {
   depends_on = [terraform_data.wait]
 }
 
-# build and push benchmarking client image
+# Build and push benchmarking client image
 resource "terraform_data" "build_and_push_image" {
   provisioner "local-exec" {
     interpreter = ["bash", "-exc"]
@@ -270,7 +228,7 @@ resource "terraform_data" "build_and_push_image" {
   depends_on = [terraform_data.add_ip_to_config_json]
 }
 
-# ssh into Prometheus instance and set target to itself to scape own performance
+# ssh into Prometheus instance and set target to itself (port 9090) to scape own performance metrics
 resource "terraform_data" "prometheus_setup" {
   provisioner "local-exec" {
     command = <<-EOT
@@ -290,6 +248,7 @@ resource "terraform_data" "prometheus_setup" {
 resource "terraform_data" "benchmarking_client_setup" {
   provisioner "remote-exec" {
     inline = [
+      "ulimit -n 10000",
       "sudo apt update",
       "sudo apt install -y apt-transport-https ca-certificates curl software-properties-common",
       "curl -fsSL https://get.docker.com -o get-docker.sh",
@@ -297,8 +256,8 @@ resource "terraform_data" "benchmarking_client_setup" {
       "sudo usermod -aG docker $USER",
       "sudo systemctl start docker",
       "sudo systemctl enable docker",
-      "sudo mkdir -p /app",  # Create a directory on the instance (if not already present)
-      "sudo chown -R admin:admin /app",  # Change ownership to the desired user (replace 'admin' with the actual username)
+      "sudo mkdir -p /app",  # Creates a directory on the instance (if not already present)
+      "sudo chown -R admin:admin /app",  # Changes ownership to the desired user
 
       # Pull the Docker image from the registry
       "sudo docker pull ghcr.io/siar-akbayin/prombench:latest",
@@ -316,7 +275,7 @@ resource "terraform_data" "benchmarking_client_setup" {
     connection {
       type        = "ssh"
       user        = "admin"  # SSH user https://alestic.com/2014/01/ec2-ssh-username/
-      private_key = file("${path.module}/${aws_key_pair.deployer.key_name}.pem")  # Update with the path to your private key
+      private_key = file("${path.module}/${aws_key_pair.deployer.key_name}.pem")
       host        = aws_instance.benchmark_client.public_ip
     }
   }
@@ -338,7 +297,7 @@ resource "terraform_data" "retrieve_results" {
     connection {
       type        = "ssh"
       user        = "admin"  # SSH user https://alestic.com/2014/01/ec2-ssh-username/
-      private_key = file("${path.module}/${aws_key_pair.deployer.key_name}.pem")  # Update with the path to your private key
+      private_key = file("${path.module}/${aws_key_pair.deployer.key_name}.pem")
       host        = aws_instance.benchmark_client.public_ip
     }
   }
@@ -346,17 +305,10 @@ resource "terraform_data" "retrieve_results" {
   depends_on = [terraform_data.benchmarking_client_setup]
 }
 
-resource "local_file" "retrieve_csv_files" {
-  file_permission = "0666"
-  content = <<-EOT
-    #!/bin/bash
-    scp -i ${aws_key_pair.deployer.key_name}.pem admin@${aws_instance.benchmark_client.public_ip}:'~/csvfiles/app/*' ./results
-    EOT
-  filename = "${path.module}/get_results.sh"
-
+# ssh into Prometheus instance and set target to itself to scape own performance
+resource "terraform_data" "retrieve_csv_files" {
+  provisioner "local-exec" {
+    command    = "mkdir -p ./results && scp -o StrictHostKeyChecking=no -i ${aws_key_pair.deployer.key_name}.pem admin@${aws_instance.benchmark_client.public_ip}:'~/csvfiles/app/*' ./results"
+  }
   depends_on = [terraform_data.retrieve_results]
-
 }
-
-
-
