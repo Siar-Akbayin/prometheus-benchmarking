@@ -37,4 +37,4 @@ Each experiment within the `experiments` array can have the following properties
 
 ## Usage
 
-This tool tailored to be used with Terraform. The usage steps are describe here: 
+This tool tailored to be used with Terraform. The usage steps are describe here: https://github.com/Siar-Akbayin/prometheus-benchmarking/tree/main/terraform-aws
