@@ -43,6 +43,11 @@ This Terraform configuration sets up a comprehensive AWS infrastructure tailored
 - The Terraform run will wait until the whole experiment is done and loop during waiting time. However, the benchmarking client will continue to run even if you stop the Terraform run. Then you will need to run `mkdir -p ./results && scp -o StrictHostKeyChecking=no -i ${aws_key_pair.deployer.key_name}.pem admin@${aws_instance.benchmark_client.public_ip}:'~/csvfiles/app/*' ./results` manually.
 
 ## Usage
+
+### Prerequisites
+The following cli tools need to be installed: docker, awk, ssh, ssh-keygen, scp, and terraform.
+
+### Setup
 Before applying this Terraform configuration, an RSA 4096-bit key pair named `aws` has to be generated and saved locally:
 
 ```shell
